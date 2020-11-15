@@ -3,6 +3,7 @@ using MS.Interop.WinUser;
 using SiretT;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -28,7 +29,6 @@ namespace ProxySwitch {
         public const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
         public const int INTERNET_OPTION_REFRESH = 37;
 
-        private List<Proxy> lauf;
         private System.Windows.Forms.NotifyIcon notify;
         private ContextMenu menu;
         private IniFile ini;
@@ -45,7 +45,6 @@ namespace ProxySwitch {
             notify.MouseClick += Notify_MouseClick;
             notify.Visible = true;
             notify.Text = "ProxySwitch";
-            lauf = new List<Proxy>();
             menu = (ContextMenu)this.FindResource("NotifierContextMenu");
             menu.PlacementTarget = this;
             menu.Placement = PlacementMode.MousePoint;
@@ -72,9 +71,9 @@ namespace ProxySwitch {
 
             WindowState = WindowState.Minimized;
             autorun.IsChecked = (bool)ini.GetValue("Main\\Autorun", false);
-            enable.IsChecked = (bool)ini.GetValue("Main\\Enabled", false);
+            enable.IsChecked = isEnable;
 
-            string _proxy = ini["Main"]["Proxy"].ToString();
+            bool isKnowed = false;
             if (ini["Proxys"] != null)
                 foreach (var i in ini["Proxys"].Properties) {
                     string value = i.Value.ToString();
@@ -89,16 +88,14 @@ namespace ProxySwitch {
                         Label = label,
                         Bypass = bypass,
                     };
-                    lauf.Add(p);
                     var rb = new RadioButton() {
                         Content = p.Label,
                         Tag = p,
                     };
                     AddNotifyMenuItem(rb, p);
-                    if (pServer == http + ":" + port) {
+                    if (pServer == http + ":" + port && pBypass == bypass) {
                         rb.IsChecked = true;
-                    } else if (_proxy == i.Key) {
-                        rb.IsChecked = true;
+                        isKnowed = true;
                     }
                     rb.Checked += Mi_Checked;
                     list.Items.Add(rb);
@@ -109,6 +106,32 @@ namespace ProxySwitch {
             if (!(bool)enable.IsChecked)
                 ico = Properties.Resources.large_computer_network_query_flat;
             notify.Icon = ico;
+            if (!isKnowed && !string.IsNullOrEmpty(pServer)) {
+                string http = pServer.Substring(0, pServer.IndexOf(':'));
+                string port = pServer.Substring(pServer.IndexOf(':') + 1);
+                Proxy p = new Proxy() {
+                    Http = http,
+                    Port = Int32.Parse(port),
+                    Label = "",
+                    Bypass = pBypass,
+                };
+                var rb = new RadioButton() {
+                    Content = p.Label,
+                    Tag = p,
+                };
+                rb.Checked += Mi_Checked;
+                list.Items.Insert(0, rb);
+                MenuItem mi = new MenuItem() {
+                    IsCheckable = true,
+                    Header = p.Label,
+                };
+                menu.Items.Insert(3, mi);
+                Binding b1 = new Binding("IsChecked") {
+                    Mode = BindingMode.TwoWay,
+                    Source = mi,
+                };
+                BindingOperations.SetBinding(rb, RadioButton.IsCheckedProperty, b1);
+            }
         }
 
         protected override void OnSourceInitialized(EventArgs e) {
@@ -168,7 +191,7 @@ namespace ProxySwitch {
                 IsCheckable = true,
                 Header = p.Label,
             };
-            menu.Items.Insert(3, mi);
+            menu.Items.Insert(4, mi);
             Binding b = new Binding("IsChecked") {
                 Mode = BindingMode.TwoWay,
                 Source = mi,
@@ -180,15 +203,19 @@ namespace ProxySwitch {
             if (notify != null) notify.Dispose();
         }
 
-        private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e) {
-            notify.Dispose();
+        private void MainWindow_Closing(object sender, CancelEventArgs e) {
+            this.WindowState = WindowState.Minimized;
+            SaveConfig();
+            e.Cancel = true;
+        }
+
+        private void SaveConfig() {
             SaveProxys();
             ini.AddOrUpdate("Main\\State", (uint)this.WindowState);
             ini.AddOrUpdate("Main\\Left", this.Left);
             ini.AddOrUpdate("Main\\Top", this.Top);
             ini.AddOrUpdate("Main\\Width", (int)this.Width);
             ini.AddOrUpdate("Main\\Height", (int)this.Height);
-            ini.AddOrUpdate("Main\\Enabled", this.enable.IsChecked);
             ini.AddOrUpdate("Main\\Autorun", this.autorun.IsChecked);
             ini.Save();
         }
@@ -197,11 +224,10 @@ namespace ProxySwitch {
             int i = 1;
             foreach (RadioButton rb in list.Items) {
                 Proxy p = rb.Tag as Proxy;
+                if (string.IsNullOrEmpty(p.Label)) continue;
                 string pxy = string.Format("{0}|{1}:{2}|{3}", p.Label, p.Http, p.Port, p.Bypass);
 
                 ini.AddOrUpdate(string.Format("Proxys\\Proxy{0}", i), pxy);
-                if (rb.IsChecked == true)
-                    ini.AddOrUpdate("Main\\Proxy", string.Format("Proxy{0}", i));
                 i++;
             }
             ini.Save();
@@ -222,7 +248,7 @@ namespace ProxySwitch {
             }
         }
 
-        private void begin_Click(object sender, RoutedEventArgs e) {
+        private void add_Click(object sender, RoutedEventArgs e) {
             if (!string.IsNullOrEmpty(proxy.Text) ||
                 !string.IsNullOrEmpty(port.Text) ||
                 !string.IsNullOrEmpty(label.Text)) {
@@ -310,7 +336,8 @@ namespace ProxySwitch {
         }
 
         private void Menu_Close(object sender, RoutedEventArgs e) {
-            this.Close();
+            SaveConfig();
+            App.Current.Shutdown();
         }
 
         private void enable_Checked(object sender, RoutedEventArgs e) {
