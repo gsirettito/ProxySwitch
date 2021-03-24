@@ -366,6 +366,7 @@ namespace ProxySwitch {
                 No = "Don't",//false
             };
             var result = messageBox.ShowDialog();
+            if (result == null) return;
             if (result == false) App.Current.Shutdown();
             else {
                 SaveDialog saveDialog = new SaveDialog() {
