@@ -4,6 +4,7 @@ using SiretT;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -37,6 +38,8 @@ namespace ProxySwitch {
         private string pBypass;
         private string proxyKey;
         private AssemblyName assembly;
+        private Proxy unsaved;
+        private bool entryNotSaved;
 
         public MainWindow() {
             InitializeComponent();
@@ -107,12 +110,17 @@ namespace ProxySwitch {
                 ico = Properties.Resources.large_computer_network_query_flat;
             notify.Icon = ico;
             if (!isKnowed && !string.IsNullOrEmpty(pServer)) {
-                string http = pServer.Substring(0, pServer.IndexOf(':'));
-                string port = pServer.Substring(pServer.IndexOf(':') + 1);
+                Uri uri;
+                if (pServer.StartsWith("http"))
+                    uri = new Uri(pServer);
+                else uri = new Uri("http://" + pServer);
+
+                string http = uri.Host;
+                int port = uri.Port;
                 Proxy p = new Proxy() {
                     Http = http,
-                    Port = Int32.Parse(port),
-                    Label = "",
+                    Port = port,
+                    Label = $"*{http}:{port}",
                     Bypass = pBypass,
                 };
                 var rb = new RadioButton() {
@@ -122,7 +130,7 @@ namespace ProxySwitch {
                 rb.Checked += Mi_Checked;
                 list.Items.Insert(0, rb);
                 MenuItem mi = new MenuItem() {
-                    IsCheckable = true,
+                    IsChecked = true,
                     Header = p.Label,
                 };
                 menu.Items.Insert(3, mi);
@@ -178,10 +186,14 @@ namespace ProxySwitch {
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
-            Left = (int)ini.GetValue("Main\\Left", (int)Left);
-            Top = (int)ini.GetValue("Main\\Top", (int)Top);
-            Width = (int)ini.GetValue("Main\\Width", (int)440);
-            Height = (int)ini.GetValue("Main\\Height", (int)370);
+            var left = ini.GetValue("Main\\Left", (int)Left);
+            var top = ini.GetValue("Main\\Top", (int)Top);
+            var width = ini.GetValue("Main\\Width", (int)440);
+            var height = ini.GetValue("Main\\Height", (int)370);
+            Left = left is int ? (int)left : Left;
+            Top = top is int ? (int)top : Top;
+            Width = width is int ? (int)width : 440;
+            Height = height is int ? (int)height : 370;
             if (WindowState == WindowState.Minimized)
                 this.Hide();
         }
@@ -222,12 +234,19 @@ namespace ProxySwitch {
 
         private void SaveProxys() {
             int i = 1;
+            entryNotSaved = false;
             foreach (RadioButton rb in list.Items) {
                 Proxy p = rb.Tag as Proxy;
                 if (string.IsNullOrEmpty(p.Label)) continue;
-                string pxy = string.Format("{0}|{1}:{2}|{3}", p.Label, p.Http, p.Port, p.Bypass);
+                if (p.Label.StartsWith("*")) {
+                    unsaved = p;
+                    entryNotSaved = true;
+                    continue;
+                }
 
-                ini.AddOrUpdate(string.Format("Proxys\\Proxy{0}", i), pxy);
+                string pxy = $"{p.Label}|{p.Http}:{p.Port}|{p.Bypass}";
+
+                ini.AddOrUpdate($"Proxys\\Proxy{i}", pxy);
                 i++;
             }
             ini.Save();
@@ -337,7 +356,32 @@ namespace ProxySwitch {
 
         private void Menu_Close(object sender, RoutedEventArgs e) {
             SaveConfig();
-            App.Current.Shutdown();
+            if (!entryNotSaved)
+                App.Current.Shutdown();
+            SiretT.Dialogs.MessageBox messageBox = new SiretT.Dialogs.MessageBox(
+                SiretT.Dialogs.MessageBoxButton.YesNoCancel) {
+                Title = this.Title,
+                Text = "There is an unsaved entry. Do you want to save? ",
+                Yes = "Save",//true
+                No = "Don't",//false
+            };
+            var result = messageBox.ShowDialog();
+            if (result == false) App.Current.Shutdown();
+            else {
+                SaveDialog saveDialog = new SaveDialog() {
+                    Title = this.Title + " - Save",
+                    Description = $"{unsaved.Http}:{unsaved.Port}"
+                };
+                result = saveDialog.ShowDialog();
+                if (result == true) {
+                    string pxy = $"{saveDialog.Label}|{unsaved.Http}:{unsaved.Port}|{unsaved.Bypass}";
+                    int i = 1;
+                    do { i++; } while (ini.Contains($"Proxys\\Proxy{i}"));
+                    ini.AddOrUpdate($"Proxys\\Proxy{i}", pxy);
+                    ini.Save();
+                    App.Current.Shutdown();
+                }
+            }
         }
 
         private void enable_Checked(object sender, RoutedEventArgs e) {
@@ -405,7 +449,7 @@ namespace ProxySwitch {
             indx = 0;
             indexer = -1;
             foreach (var i in ini["Proxys"].Properties) {
-                if (Regex.IsMatch(i.Value.ToString(), string.Format("^{0}", p.Label))) {
+                if (Regex.IsMatch(i.Value.ToString(), $"^{p.Label}")) {
                     indexer = indx;
                     break;
                 }

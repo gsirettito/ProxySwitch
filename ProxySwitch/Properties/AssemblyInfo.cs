@@ -8,9 +8,9 @@ using System.Windows;
 // conjunto de atributos. Cambie estos valores de atributo para modificar la información
 // asociada con un ensamblado.
 [assembly: AssemblyTitle("ProxySwitch")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Store your proxy settings and switch between them quickly.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("gsirett")]
 [assembly: AssemblyProduct("ProxySwitch")]
 [assembly: AssemblyCopyright("Copyright ©  2020")]
 [assembly: AssemblyTrademark("")]
@@ -51,5 +51,5 @@ using System.Windows;
 // Puede especificar todos los valores o usar los valores predeterminados de número de compilación y de revisión
 // utilizando el carácter "*", como se muestra a continuación:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.21.3")]
+[assembly: AssemblyFileVersion("1.2.21.3")]
