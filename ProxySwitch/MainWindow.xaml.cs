@@ -70,7 +70,7 @@ namespace ProxySwitch {
             pBypass = rk.GetValue("ProxyOverride", "").ToString();
             rk.Close();
 
-            ini = new IniFile("config.ini");
+            ini = new IniFile(System.IO.Path.GetDirectoryName(Environment.GetCommandLineArgs()[0]) + "\\config.ini");
 
             WindowState = WindowState.Minimized;
             autorun.IsChecked = (bool)ini.GetValue("Main\\Autorun", false);
